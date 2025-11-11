@@ -634,12 +634,7 @@ def main_app():
 
 if __name__ == '__main__':  
     
-    
-    
-    configuration_file = r'hevo-key.json'
-    object_name = r'hevo_object_to_restart.xlsx'
-    
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)
     
     start = dt.datetime.now()
     #app_restart_object(configuration_file, object_name, True)
