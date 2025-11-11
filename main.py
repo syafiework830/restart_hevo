@@ -1,7 +1,9 @@
 import requests, base64, json, pandas as pd, os, datetime as dt, humanfriendly
 from requests.models import Response
 from typing import Optional
+from dotenv import load_dotenv
 
+load_dotenv()
 
 def throw_error(function_name:str, error_raise:Exception, error_message:Optional[str] =None)-> None:
     print('-'*150)
@@ -126,18 +128,10 @@ def handle_keys(cred_file_path:str)-> str:
     fx_separator('handle_keys')
     
     try:
-        
-        cred_file_path = check_path_existence(cred_file_path)
-        
-        print(f"📌 File path: {cred_file_path}")
-        start = dt.datetime.now()
-        
-        with open(cred_file_path, 'r') as f:
-            file: dict[str, str] = json.load(f)   # this converts JSON text → Python dict
-                
-        access_key:str | None = file.get('access_key')
-        secret_key:str | None = file.get('secret_key')
-        api_host:str | None = file.get('api_host')
+    
+        access_key:str | None = os.getenv("access_key")
+        secret_key:str | None = os.getenv("secret_key")
+        api_host:str | None = os.getenv("api_host")
            
         if not all([access_key, secret_key, api_host]):
             raise ValueError("Missing one or more required fields: 'access_key', 'secret_key', or 'api_host'")
