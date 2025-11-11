@@ -111,7 +111,7 @@ def check_path_existence(file_path:str)-> str:
 # Handles credentials
 # ==============================================================
 
-def handle_keys(cred_file_path:str)-> str:
+def handle_keys()-> tuple[str, str]:
     '''
     Merge the given keys from a json file and convert them into Base64 format as required by Hevo's API.
 
@@ -128,30 +128,29 @@ def handle_keys(cred_file_path:str)-> str:
     fx_separator('handle_keys')
     
     try:
-    
-        access_key:str | None = os.getenv("access_key")
-        secret_key:str | None = os.getenv("secret_key")
-        api_host:str | None = os.getenv("api_host")
+        start = dt.datetime.now()
+        
+        access_key:str = os.environ.get("access_key")
+        secret_key:str = os.getenv("secret_key")
+        api_host:str = os.getenv("api_host")
            
         if not all([access_key, secret_key, api_host]):
             raise ValueError("Missing one or more required fields: 'access_key', 'secret_key', or 'api_host'")
         
         print(f"📌 Encoding authentication key") 
-          
+    
         key:str = f"{access_key}:{secret_key}"
         key_base64:bytes = str(base64.b64encode(key.encode('ascii')))
         authentication_key:str = key_base64.strip().replace("=",'').removeprefix('b').replace("'",'')
-
+        print(authentication_key)
+        print(api_host)
         print(f"⏱️: {dt.datetime.now().strftime('%H:%M:%S')}")
         print(f"⌛: {humanfriendly.format_timespan(dt.datetime.now()-start)}")
 
         return authentication_key, api_host
     
-    except FileNotFoundError:
-            throw_error('handle_keys', FileNotFoundError, f'File is not found at {cred_file_path}')
-    
     except Exception:
-            throw_error('handle_keys', Exception)
+            throw_error('handle_keys', Exception, print(authentication_key))
 
 # ==============================================================
 # Retrieves all pipelines
@@ -547,10 +546,10 @@ def app_restart_object_with_reports(config_file:str, excel_path:str, is_save_df:
         df.to_excel(output_filename)
         step_separator(f"📁 File successfully saved as: {output_filename} \n at: {os.path.dirname(output_filename) if os.getcwd() in output_filename else os.getcwd()}")
         
-def app_restart_object(config_file:str, excel_path:str) -> dict:
+def app_restart_object(excel_path:str) -> dict:
 
     # Configure credentials
-    auth_key,api_host  = handle_keys(config_file)
+    auth_key,api_host  = handle_keys()
 
     # Load excel file and df
     excel_df = load_param_from_excel(excel_path)
@@ -587,39 +586,21 @@ def restart_hevo_object():
     print("="*75)
     print(f"Time Start: {dt.datetime.now().strftime('%H-%M')}")
 
-    # Get JSON from Power Automate
-    try:
-        data = request.get_json()
-    except Exception as e:
-        return jsonify({"error": f"Invalid JSON: {str(e)}"}), 400
+    # Get param file
+    if 'param_file' not in request.files:
+        return jsonify({"error": "No param_file uploaded"}), 400
+    param_file = request.files['param_file']
 
-    # Validate keys exist
-    if 'config_file' not in data or 'param_file' not in data:
-        return jsonify({"error": "Both 'config_file' and 'param_file' must be provided"}), 400
+    if param_file.filename == '':
+        return jsonify({"error": "param_file is empty"}), 400
 
-    # Decode config file
-    try:
-        config_bytes = base64.b64decode(data['config_file']['contentBytes'])
-        config_filename = data['config_file'].get('fileName', 'config.json')
-        with NamedTemporaryFile(delete=False, suffix=config_filename) as temp_config:
-            temp_config.write(config_bytes)
-            config_path = temp_config.name
-    except Exception as e:
-        return jsonify({"error": f"Failed to decode config_file: {str(e)}"}), 400
-
-    # Decode param file
-    try:
-        param_bytes = base64.b64decode(data['param_file']['contentBytes'])
-        param_filename = data['param_file'].get('fileName', 'param.xlsx')
-        with NamedTemporaryFile(delete=False, suffix=param_filename) as temp_param:
-            temp_param.write(param_bytes)
-            param_path = temp_param.name
-    except Exception as e:
-        return jsonify({"error": f"Failed to decode param_file: {str(e)}"}), 400
+    with NamedTemporaryFile(delete=False, suffix=param_file.filename) as temp_param:
+        param_file.save(temp_param.name)
+        param_path = temp_param.name 
 
     # Call your existing function
     try:
-        result = app_restart_object(config_path, param_path)
+        result = app_restart_object(param_path)
     except Exception as e:
         return jsonify({"error": f"app_restart_object failed: {str(e)}"}), 500
 
