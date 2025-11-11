@@ -583,20 +583,34 @@ app = Flask(__name__)
 
 @app.route('/restart_hevo_object', methods=['POST'])
 def restart_hevo_object():
+    import base64
+    import datetime as dt
+    from tempfile import NamedTemporaryFile
+    from flask import request, jsonify
+
     print("="*75)
     print(f"Time Start: {dt.datetime.now().strftime('%H-%M')}")
 
-    # Get param file
-    if 'param_file' not in request.files:
-        return jsonify({"error": "No param_file uploaded"}), 400
-    param_file = request.files['param_file']
+    # Get param file from JSON
+    data = request.get_json()
+    if not data or 'param_file' not in data:
+        return jsonify({"error": "No param_file provided"}), 400
 
-    if param_file.filename == '':
-        return jsonify({"error": "param_file is empty"}), 400
+    param_file = data['param_file']
 
-    with NamedTemporaryFile(delete=False, suffix=param_file.filename) as temp_param:
-        param_file.save(temp_param.name)
-        param_path = temp_param.name 
+    if not param_file.get('fileName') or not param_file.get('contentBytes'):
+        return jsonify({"error": "param_file is missing 'fileName' or 'contentBytes'"}), 400
+
+    # Decode Base64 content
+    try:
+        content_bytes = base64.b64decode(param_file['contentBytes'])
+    except Exception as e:
+        return jsonify({"error": f"Failed to decode param_file content: {str(e)}"}), 400
+
+    # Save to temp file
+    with NamedTemporaryFile(delete=False, suffix=param_file['fileName']) as temp:
+        temp.write(content_bytes)
+        param_path = temp.name
 
     # Call your existing function
     try:
@@ -604,7 +618,7 @@ def restart_hevo_object():
     except Exception as e:
         return jsonify({"error": f"app_restart_object failed: {str(e)}"}), 500
 
-    # Check for failures in results (assuming result is a dict of statuses)
+    # Check for failures
     has_failures = any(
         not (200 <= v.get("status_code", 0) <= 299)
         for v in result.values()
