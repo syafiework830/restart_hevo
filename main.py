@@ -589,40 +589,50 @@ from tempfile import NamedTemporaryFile
 app = Flask(__name__)
 
 @app.route('/restart_hevo_object', methods=['POST'])
-def main_app():
+def restart_hevo_object():
     print("="*75)
     print(f"Time Start: {dt.datetime.now().strftime('%H-%M')}")
-    # Get config file
-    if 'config_file' not in request.files:
-        return jsonify({"error": "No config_file uploaded"}), 400
-    config_file = request.files['config_file']
 
-    if config_file.filename == '':
-        return jsonify({"error": "config_file is empty"}), 400
+    # Get JSON from Power Automate
+    try:
+        data = request.get_json()
+    except Exception as e:
+        return jsonify({"error": f"Invalid JSON: {str(e)}"}), 400
 
-    # Get param file
-    if 'param_file' not in request.files:
-        return jsonify({"error": "No param_file uploaded"}), 400
-    param_file = request.files['param_file']
+    # Validate keys exist
+    if 'config_file' not in data or 'param_file' not in data:
+        return jsonify({"error": "Both 'config_file' and 'param_file' must be provided"}), 400
 
-    if param_file.filename == '':
-        return jsonify({"error": "param_file is empty"}), 400
+    # Decode config file
+    try:
+        config_bytes = base64.b64decode(data['config_file']['contentBytes'])
+        config_filename = data['config_file'].get('fileName', 'config.json')
+        with NamedTemporaryFile(delete=False, suffix=config_filename) as temp_config:
+            temp_config.write(config_bytes)
+            config_path = temp_config.name
+    except Exception as e:
+        return jsonify({"error": f"Failed to decode config_file: {str(e)}"}), 400
 
-    # ✅ Save both files to temporary locations
-    with NamedTemporaryFile(delete=False, suffix=config_file.filename) as temp_config:
-        config_file.save(temp_config.name)
-        config_path = temp_config.name
+    # Decode param file
+    try:
+        param_bytes = base64.b64decode(data['param_file']['contentBytes'])
+        param_filename = data['param_file'].get('fileName', 'param.xlsx')
+        with NamedTemporaryFile(delete=False, suffix=param_filename) as temp_param:
+            temp_param.write(param_bytes)
+            param_path = temp_param.name
+    except Exception as e:
+        return jsonify({"error": f"Failed to decode param_file: {str(e)}"}), 400
 
-    with NamedTemporaryFile(delete=False, suffix=param_file.filename) as temp_param:
-        param_file.save(temp_param.name)
-        param_path = temp_param.name  
+    # Call your existing function
+    try:
+        result = app_restart_object(config_path, param_path)
+    except Exception as e:
+        return jsonify({"error": f"app_restart_object failed: {str(e)}"}), 500
 
-    result = app_restart_object(config_path, param_path)
-
-    summary = result
+    # Check for failures in results (assuming result is a dict of statuses)
     has_failures = any(
-        not (200 <= v["status_code"] <= 299)
-        for v in summary.values()
+        not (200 <= v.get("status_code", 0) <= 299)
+        for v in result.values()
     )
 
     return jsonify({
