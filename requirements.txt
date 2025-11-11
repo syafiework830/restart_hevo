@@ -3,5 +3,5 @@ schedule
 python-dotenv
 pandas
 openpyxl
-flask
 humanfriendly
+flask
