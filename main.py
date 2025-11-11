@@ -1,4 +1,4 @@
-import requests, base64, json, pandas as pd, os, datetime as dt, humanfriendly, tabulate
+import requests, base64, json, pandas as pd, os, datetime as dt, humanfriendly
 from requests.models import Response
 from typing import Optional
 
